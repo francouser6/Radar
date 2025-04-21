@@ -1,38 +1,23 @@
+import requests
+from bs4 import BeautifulSoup
 import pandas as pd
 import logging
-from selenium import webdriver
-from selenium.webdriver.edge.service import Service as EdgeService
-from selenium.webdriver.edge.options import Options
-from selenium.webdriver.support.ui import WebDriverWait
-from selenium.webdriver.support import expected_conditions as EC
-from selenium.webdriver.common.by import By
-from selenium.common.exceptions import TimeoutException, NoSuchElementException, WebDriverException
-from webdriver_manager.microsoft import EdgeChromiumDriverManager
 
 def scrape_sbs():
     url = "https://www.sbs.gob.pe/app/pp/INT_CN/Paginas/Busqueda/BusquedaPortal.aspx"
-    service = EdgeService(EdgeChromiumDriverManager().install())
-    options = Options()
-    options.headless = False  # Ejecutar sin modo headless para depuración
-    driver = webdriver.Edge(service=service, options=options)
-
+    
     logging.basicConfig(level=logging.INFO)
     
     try:
-        # Abrir la página web
-        driver.get(url)
+        # Realizar la solicitud HTTP
+        response = requests.get(url)
+        response.raise_for_status()  # Verificar que la solicitud fue exitosa
         logging.info("Página web abierta con éxito.")
-
-        # Esperar explícitamente a que el contenido se cargue
-        WebDriverWait(driver, 30).until(
-            EC.presence_of_element_located((By.CLASS_NAME, "rgMasterTable"))
-        )
+        
+        # Parsear el contenido HTML
+        soup = BeautifulSoup(response.content, 'html.parser')
         logging.info("Contenido cargado con éxito.")
-
-        # Tomar una captura de pantalla para verificar el contenido cargado
-        driver.save_screenshot('screenshot.png')
-        logging.info("Captura de pantalla tomada.")
-
+        
         # Definir las rutas XPath para los datos
         norma_xpath_template = '//*[@id="ctl00_ContentPlaceHolder1_rdgUltimaVersionNormas_ctl00__{}"]/td[2]'
         definicion_xpath_template = '//*[@id="ctl00_ContentPlaceHolder1_rdgUltimaVersionNormas_ctl00__{}"]/td[4]'
@@ -47,7 +32,7 @@ def scrape_sbs():
         sistemas = []
 
         # Obtener el número de filas dinámicamente
-        rows = driver.find_elements(By.XPATH, '//*[@id="ctl00_ContentPlaceHolder1_rdgUltimaVersionNormas_ctl00"]/tbody/tr')
+        rows = soup.select('table.rgMasterTable tbody tr')
         num_rows = len(rows)
 
         # Iterar sobre las filas
@@ -60,31 +45,24 @@ def scrape_sbs():
                 sistema_xpath = sistema_xpath_template.format(i)
 
                 # Extraer los datos
-                norma_element = driver.find_element(By.XPATH, norma_xpath)
-                definicion_element = driver.find_element(By.XPATH, definicion_xpath)
-                tipo_element = driver.find_element(By.XPATH, tipo_xpath)
-                fecha_element = driver.find_element(By.XPATH, fecha_xpath)
-                sistema_element = driver.find_element(By.XPATH, sistema_xpath)
+                norma_element = soup.select_one(f'xpath:{norma_xpath}')
+                definicion_element = soup.select_one(f'xpath:{definicion_xpath}')
+                tipo_element = soup.select_one(f'xpath:{tipo_xpath}')
+                fecha_element = soup.select_one(f'xpath:{fecha_xpath}')
+                sistema_element = soup.select_one(f'xpath:{sistema_xpath}')
 
-                normas.append(norma_element.text.strip())
-                definiciones.append(definicion_element.text.strip())
-                tipos.append(tipo_element.text.strip())
-                fechas.append(fecha_element.text.strip())
-                sistemas.append(sistema_element.text.strip())
-            except NoSuchElementException:
-                logging.warning(f"Elemento no encontrado en la posición {i}.")
+                normas.append(norma_element.text.strip() if norma_element else '')
+                definiciones.append(definicion_element.text.strip() if definicion_element else '')
+                tipos.append(tipo_element.text.strip() if tipo_element else '')
+                fechas.append(fecha_element.text.strip() if fecha_element else '')
+                sistemas.append(sistema_element.text.strip() if sistema_element else '')
+            except Exception as e:
+                logging.warning(f"Error al extraer datos en la posición {i}: {e}")
                 continue
 
-    except TimeoutException:
-        logging.error("El contenido no se cargó a tiempo.")
+    except requests.exceptions.RequestException as e:
+        logging.error(f"Error en la solicitud HTTP: {e}")
         return None
-    except WebDriverException as e:
-        logging.error(f"Error del WebDriver: {e}")
-        return None
-    finally:
-        # Cerrar el navegador
-        driver.quit()
-        logging.info("Navegador cerrado.")
 
     # Crear un DataFrame con los datos extraídos
     df = pd.DataFrame({
@@ -106,9 +84,16 @@ def scrape_sbs():
 
     return df
 
+# Crear la aplicación de Streamlit
+import streamlit as st
+
+st.title("Scraping SBS Data")
+st.write("Esta aplicación extrae datos de la SBS y los muestra en un DataFrame.")
+
 # Llamar a la función y mostrar el DataFrame
 sbs = scrape_sbs()
 if sbs is not None:
-    print(sbs)
+    st.dataframe(sbs)
 else:
-    print("No se pudo extraer los datos.")
+    st.write("No se pudo extraer los datos.")
+
