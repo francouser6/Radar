@@ -1,4 +1,3 @@
-import streamlit as st
 import pandas as pd
 import logging
 from selenium import webdriver
@@ -14,7 +13,7 @@ def scrape_sbs():
     url = "https://www.sbs.gob.pe/app/pp/INT_CN/Paginas/Busqueda/BusquedaPortal.aspx"
     service = EdgeService(EdgeChromiumDriverManager().install())
     options = Options()
-    options.headless = True  # Ejecutar en modo headless
+    options.headless = False  # Ejecutar sin modo headless para depuración
     driver = webdriver.Edge(service=service, options=options)
 
     logging.basicConfig(level=logging.INFO)
@@ -107,13 +106,9 @@ def scrape_sbs():
 
     return df
 
-# Crear la aplicación de Streamlit
-st.title("Scraping SBS Data")
-st.write("Esta aplicación extrae datos de la SBS y los muestra en un DataFrame.")
-
 # Llamar a la función y mostrar el DataFrame
 sbs = scrape_sbs()
 if sbs is not None:
-    st.dataframe(sbs)
+    print(sbs)
 else:
-    st.write("No se pudo extraer los datos.")
+    print("No se pudo extraer los datos.")
